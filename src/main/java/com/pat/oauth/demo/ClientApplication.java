@@ -21,48 +21,36 @@ import org.springframework.security.web.authentication.www.BasicAuthenticationFi
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.filter.CompositeFilter;
 
 import javax.servlet.Filter;
 import java.security.Principal;
-import java.util.ArrayList;
-import java.util.List;
 
 @RestController
 @EnableOAuth2Client
 @SpringBootApplication
-public class DemoApplication extends WebSecurityConfigurerAdapter {
+@SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
+public class ClientApplication extends WebSecurityConfigurerAdapter {
 
-    @RequestMapping("/user")
+    @Autowired
+    private OAuth2ClientContext oauth2ClientContext;
+
+    @RequestMapping({"/user", "/me"})
     public Principal user(Principal principal) {
         return principal;
     }
 
-    @Autowired
-    OAuth2ClientContext oauth2ClientContext;
-
     @Override
     protected void configure(HttpSecurity http) throws Exception {
-        http
-                .antMatcher("/**")
+
+        http.antMatcher("/**")
                 .authorizeRequests()
-                .antMatchers("/", "/login**", "/webjars/**")
-                .permitAll()
-                .anyRequest()
-                .authenticated()
+                .antMatchers("/", "/login**", "/webjars/**", "/gettoken").permitAll()
+                .anyRequest().authenticated()
                 .and().logout().logoutSuccessUrl("/").permitAll()
                 .and().csrf().csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-                .and().addFilterBefore(ssoFilter(), BasicAuthenticationFilter.class);
+                .and().addFilterBefore(ssoFilter(custom(), "/login/custom"), BasicAuthenticationFilter.class)
+                .httpBasic()
         ;
-    }
-
-    private Filter ssoFilter() {
-        CompositeFilter filter = new CompositeFilter();
-        List<Filter> filters = new ArrayList<>();
-        filters.add(ssoFilter(facebook(), "/login/facebook"));
-        filters.add(ssoFilter(github(), "/login/github"));
-        filter.setFilters(filters);
-        return filter;
     }
 
     private Filter ssoFilter(ClientResources client, String path) {
@@ -77,6 +65,12 @@ public class DemoApplication extends WebSecurityConfigurerAdapter {
     }
 
     @Bean
+    @ConfigurationProperties("custom")
+    public ClientResources custom() {
+        return new ClientResources();
+    }
+
+    @Bean
     public FilterRegistrationBean oauth2ClientFilterRegistration(OAuth2ClientContextFilter filter) {
         FilterRegistrationBean registration = new FilterRegistrationBean();
         registration.setFilter(filter);
@@ -84,20 +78,8 @@ public class DemoApplication extends WebSecurityConfigurerAdapter {
         return registration;
     }
 
-    @Bean
-    @ConfigurationProperties("github")
-    public ClientResources github() {
-        return new ClientResources();
-    }
-
-    @Bean
-    @ConfigurationProperties("facebook")
-    public ClientResources facebook() {
-        return new ClientResources();
-    }
-
     public static void main(String[] args) {
-		SpringApplication.run(DemoApplication.class, args);
+		SpringApplication.run(ClientApplication.class, args);
 	}
 }
 
